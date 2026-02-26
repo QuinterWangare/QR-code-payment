@@ -67,8 +67,8 @@ app.get("/stkpush", (req, res) => {
       const timestamp = moment().format("YYYYMMDDHHmmss");
       const password = Buffer.from(
         "174379" +
-        "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919" +
-        timestamp,
+          "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919" +
+          timestamp,
       ).toString("base64");
 
       axios
@@ -80,12 +80,12 @@ app.get("/stkpush", (req, res) => {
             Timestamp: timestamp,
             TransactionType: "CustomerPayBillOnline",
             Amount: "1",
-            PartyA: 254706042140,
+            PartyA: 254768174504,
             PartyB: "174379",
-            PhoneNumber: 254706042140,
+            PhoneNumber: 254768174504,
             CallBackURL:
               "https://741b-102-0-25-70.ngrok-free.app/mpesa/callback",
-            AccountReference: "Jeff",
+            AccountReference: "Quinter",
             TransactionDesc: "Mpesa Daraja API stk push test",
           },
           {
@@ -96,7 +96,7 @@ app.get("/stkpush", (req, res) => {
         )
         .then((response) => {
           res.send(
-            "Request is successful done ✔✔. Please check your phone and enter mpesa pin to complete the transaction"
+            "Request is successful done ✔✔. Please check your phone and enter mpesa pin to complete the transaction",
           );
         })
         .catch((error) => {
