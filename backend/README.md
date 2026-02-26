@@ -87,7 +87,7 @@ Forwarding  https://xxxx-xxx-xxx-xxx.ngrok-free.app -> http://localhost:5000
 Copy the `https://` URL — you will need it for the `CallBackURL` in [app.js](app.js):
 
 ```js
-CallBackURL: "https://xxxx-xxx-xxx-xxx.ngrok-free.app/callback",
+CallBackURL: " https://profligately-unflaming-vannesa.ngrok-free.dev",
 ```
 
 > **Note:** The ngrok URL changes every time you restart ngrok (on the free plan). Update `CallBackURL` in `app.js` each time.

@@ -1,14 +1,3 @@
-/*
-  Author: Alvin Kiveu
-  Description: Mpesa Daraja API with Node JS
-  Date: 23/10/2023
-  Github Link: https://github.com/alvin-kiveu/Mpesa-Daraja-Api-NODE.JS.git
-  Website: www.umeskiasoftwares.com
-  Email: info@umeskiasoftwares.com
-  Phone: +254113015674
-  
-*/
-
 const express = require('express');
 const router = express.Router();
 const axios = require("axios");
@@ -92,7 +81,7 @@ router.post('/api/stkpush', (req, res) => {
             PartyA: phoneNumber,
             PartyB: "174379",
             PhoneNumber: phoneNumber,
-            CallBackURL: "https://249e-105-60-226-239.ngrok-free.app/api/callback",
+            CallBackURL: "https://xxxx-xxx-xxx-xxx.ngrok-free.app/api/callback",
             AccountReference: accountNumber,
             TransactionDesc: "Mpesa Daraja API stk push test",
           },
@@ -103,7 +92,7 @@ router.post('/api/stkpush', (req, res) => {
           }
         )
         .then((response) => {
-          // res.send("😀 Request is successful done ✔✔. Please enter mpesa pin to complete the transaction");
+          // res.send("Request successful done ✔✔. Please enter mpesa pin to complete the transaction");
           //SEND BACK A JSON RESPONSE TO THE CLIENT
           console.log(response.data);
           res.status(200).json({
