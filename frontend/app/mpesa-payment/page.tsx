@@ -6,18 +6,12 @@ import { initiateStkPush, queryStkStatus } from "@/lib/mpesa-api";
 
 const SESSION_KEY = "qr_pay_checkout_id";
 const AMOUNT = 10;
-// Safaricom's STK Push prompt is active for exactly 60 seconds.
-// We poll every 5 s with a 5 s head-start delay, so attempt N fires at 5*N seconds.
-// 12 attempts × 5 s = 60 s — matches the prompt's lifetime precisely.
-const MAX_ATTEMPTS = 12;           // 60 s total — matches Safaricom's STK expiry
-const NUDGE_AFTER_ATTEMPTS = 5;   // 25 s — show "still waiting" hint at half-time
+const MAX_ATTEMPTS = 12;
+const NUDGE_AFTER_ATTEMPTS = 5;
+const TIMEOUT_MS = 90_000;
 
-/**
- * Returns true if the 9-digit Kenyan number (after +254) belongs to Safaricom.
- * Safaricom prefixes: 700-729, 740-749, 757-759, 768-769, 790-799, 110, 111, 114, 115
- */
 function isSafaricomNumber(nineDigits: string): boolean {
-  if (nineDigits.length < 3) return true; // too short to validate yet
+  if (nineDigits.length < 3) return true;
   const p = parseInt(nineDigits.slice(0, 3), 10);
   return (
     (p >= 700 && p <= 729) ||
@@ -29,7 +23,6 @@ function isSafaricomNumber(nineDigits: string): boolean {
   );
 }
 
-/** Map an STK-push failure reason code to a user-friendly inline message. */
 function stkErrorMessage(reason: string | undefined, raw: string): string {
   switch (reason) {
     case "duplicate_transaction":
@@ -42,53 +35,26 @@ function stkErrorMessage(reason: string | undefined, raw: string): string {
   }
 }
 
-const TIMEOUT_MS = 90_000; // 90 seconds to enter PIN
-
 export default function MpesaPaymentPage() {
   const router = useRouter();
+
   const [phoneNumber, setPhoneNumber] = useState("");
-  const [sentToPhone, setSentToPhone] = useState(""); // the number we last sent the STK push to
+  const [sentToPhone, setSentToPhone] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStage, setProcessingStage] = useState<"sending" | "waiting">("sending");
-  const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_MS / 1000);
-  const [error, setError] = useState("");
-  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  const amount = 10;
-
-  const clearAllTimers = () => {
-    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
-    if (hardTimerRef.current) clearTimeout(hardTimerRef.current);
-    if (countdownRef.current) clearInterval(countdownRef.current);
-  };
-
-  const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "");
-    if (value.length <= 9) {
-      setPhoneNumber(value);
-      setError("");
-    }
-  };
-
-  const handlePayment = async () => {
-    if (phoneNumber.length !== 9) {
-      setError("Please enter a valid phone number");
-      return;
-    }
   const [processingStage, setProcessingStage] = useState<"sending" | "waiting" | "resuming">("sending");
+  const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_MS / 1000);
   const [error, setError] = useState("");
   const [showChangeNumber, setShowChangeNumber] = useState(false);
   const [showNudge, setShowNudge] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
 
-  // Increment this ref to cancel any running poll loop before starting a new one
   const pollToken = useRef(0);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // ─── Reset: cancel poll and return the form for a fresh number entry ────────
+  // ─── Reset ────────────────────────────────────────────────────────────────
   const resetToForm = useCallback(() => {
-    pollToken.current += 1; // invalidates any running poll
+    pollToken.current += 1;
+    if (countdownRef.current) clearInterval(countdownRef.current);
     sessionStorage.removeItem(SESSION_KEY);
     setIsProcessing(false);
     setProcessingStage("sending");
@@ -96,26 +62,9 @@ export default function MpesaPaymentPage() {
     setShowNudge(false);
     setTimedOut(false);
     setError("");
-    // Clear the field so the user is forced to re-enter, preventing an
-    // immediate re-submit to the same number while the previous STK push
-    // is still pending (which Safaricom rejects as a duplicate transaction).
     setPhoneNumber("");
   }, []);
 
-    try {
-      const formattedPhone = `254${phoneNumber}`;
-
-      const response = await fetch("/api/stkpush", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone: formattedPhone, amount, accountNumber: "QR-PAY" }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok || !data.status) {
-        throw new Error(data.msg || "Payment initiation failed");
-      }
   // ─── Redirect helper ──────────────────────────────────────────────────────
   const redirectFailed = useCallback(
     (reason: string, message: string) => {
@@ -132,106 +81,44 @@ export default function MpesaPaymentPage() {
       setProcessingStage("waiting");
       setSecondsLeft(TIMEOUT_MS / 1000);
 
-      // --- countdown display ---
+      if (countdownRef.current) clearInterval(countdownRef.current);
       countdownRef.current = setInterval(() => {
         setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
       }, 1000);
+
       setShowNudge(false);
       setTimedOut(false);
       setShowChangeNumber(false);
-
       sessionStorage.setItem(SESSION_KEY, checkoutRequestId);
 
-      // Snapshot token so this poll loop can detect if it has been cancelled
       const myToken = pollToken.current;
       let attempts = 0;
 
       const poll = async (): Promise<void> => {
-        if (pollToken.current !== myToken) return; // cancelled — a newer poll is running
+        if (pollToken.current !== myToken) return;
 
         if (attempts >= MAX_ATTEMPTS) {
-          // Show inline recovery panel instead of hard-navigating away
+          if (countdownRef.current) clearInterval(countdownRef.current);
           setTimedOut(true);
           return;
         }
 
         if (attempts === NUDGE_AFTER_ATTEMPTS) {
-          setShowNudge(true); // gentle hint after 30 s
+          setShowNudge(true);
         }
 
         attempts++;
 
-      // --- hard timeout: mark failed + go home ---
-      hardTimerRef.current = setTimeout(async () => {
-        clearAllTimers();
-        // Mark transaction as failed in DB
         try {
-          await fetch("/api/mpesa-timeout", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ checkoutRequestId }),
-          });
-        } catch { /* ignore */ }
-        router.push("/");
-      }, TIMEOUT_MS);
-
-      // --- poll DB status every 3 seconds ---
-      const pollDB = async () => {
-        try {
-          const res = await fetch(`/api/mpesa-status/${encodeURIComponent(checkoutRequestId)}`);
-          const statusData = await res.json();
-
-          if (statusData.status === "success") {
-            clearAllTimers();
-            router.push("/payment-success?method=mpesa");
-            return;
-          } else if (statusData.status === "failed") {
-            clearAllTimers();
-            setError("Payment was cancelled or failed. Please try again.");
-            setIsProcessing(false);
-            return;
-          }
-        } catch { /* ignore, retry */ }
-
-        // Still pending — also double-check via Safaricom STK query
-        try {
-          const stkRes = await fetch("/api/stkquery", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ checkoutRequestId }),
-          });
-          const stkData = await stkRes.json();
-
-          if (stkData.status === "success") {
-            clearAllTimers();
-            router.push("/payment-success?method=mpesa");
-            return;
-          } else if (stkData.status === "failed") {
-            clearAllTimers();
-            setError(stkData.message || "Payment was cancelled or failed.");
-            setIsProcessing(false);
-            return;
-          }
-        } catch { /* ignore */ }
-
-        // Still pending — schedule next poll
-        pollTimerRef.current = setTimeout(pollDB, 3000);
-      };
-
-      // First check after 5s (time for user to open M-Pesa app)
-      pollTimerRef.current = setTimeout(pollDB, 5000);
-
-    } catch (err: unknown) {
-      clearAllTimers();
-      setError(err instanceof Error ? err.message : "Payment failed. Please try again.");
           const data = await queryStkStatus(checkoutRequestId);
-
-          if (pollToken.current !== myToken) return; // cancelled while awaiting
+          if (pollToken.current !== myToken) return;
 
           if (data.status === "success") {
+            if (countdownRef.current) clearInterval(countdownRef.current);
             sessionStorage.removeItem(SESSION_KEY);
             router.push("/payment-success");
           } else if (data.status === "failed") {
+            if (countdownRef.current) clearInterval(countdownRef.current);
             redirectFailed(
               data.reason || "failed",
               data.message || "Payment was not completed. Please try again.",
@@ -250,7 +137,7 @@ export default function MpesaPaymentPage() {
     [router, redirectFailed],
   );
 
-  // ─── On mount: resume an in-progress payment (e.g. page refresh) ─────────
+  // ─── On mount: resume an in-progress payment ──────────────────────────────
   useEffect(() => {
     const savedId = sessionStorage.getItem(SESSION_KEY);
     if (savedId) {
@@ -268,7 +155,7 @@ export default function MpesaPaymentPage() {
     }
   };
 
-  // ─── Shared STK Push sender (used by both first attempt and resend) ───────
+  // ─── Send STK Push ────────────────────────────────────────────────────────
   const sendStkPush = useCallback(
     async (phone: string) => {
       const data = await initiateStkPush({
@@ -298,7 +185,7 @@ export default function MpesaPaymentPage() {
     }
     if (!isSafaricomNumber(phoneNumber)) {
       setError(
-        "This number does not appear to be a Safaricom line. M-Pesa is only available on Safaricom. Please use a number starting with 07xx (Safaricom) or 011x.",
+        "This number does not appear to be a Safaricom line. M-Pesa is only available on Safaricom.",
       );
       return;
     }
@@ -337,18 +224,17 @@ export default function MpesaPaymentPage() {
 
   const isPhoneValid = phoneNumber.length === 9;
 
-  // ─── Processing stage label ───────────────────────────────────────────────
   const stageLabel =
     processingStage === "sending"
       ? "Sending prompt to your phone..."
       : processingStage === "resuming"
         ? "Resuming your payment..."
-        : "Waiting for PIN entry...";
+        : `Waiting for PIN... ${secondsLeft}s`;
 
   return (
     <div className="min-h-screen bg-[#1a1f2e] flex flex-col px-6 py-8">
 
-      {/* ── Change-number confirmation overlay ──────────────────────────── */}
+      {/* ── Change-number overlay ──────────────────────────────────────────── */}
       {showChangeNumber && (
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 backdrop-blur-sm px-4 pb-8">
           <div className="w-full max-w-md bg-[#1e2636] rounded-[28px] p-6 shadow-2xl">
@@ -407,7 +293,6 @@ export default function MpesaPaymentPage() {
 
       {/* Payment Form */}
       <div className="w-full max-w-md mx-auto flex-1">
-        {/* M-Pesa header */}
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="w-12 h-12 bg-[#10b981] rounded-[12px] flex items-center justify-center">
@@ -443,7 +328,7 @@ export default function MpesaPaymentPage() {
           {error && <p className="text-red-400 text-sm mt-2">{error}</p>}
         </div>
 
-        {/* Wrong number? link — visible only while actively waiting for PIN */}
+        {/* Wrong number? */}
         {isProcessing && processingStage === "waiting" && !timedOut && (
           <div className="mb-5 flex justify-end">
             <button
@@ -455,19 +340,19 @@ export default function MpesaPaymentPage() {
           </div>
         )}
 
-        {/* Nudge: still waiting after 30 s */}
+        {/* Nudge */}
         {showNudge && !timedOut && (
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-[16px] p-4 mb-6 flex gap-3 items-start">
             <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
             </svg>
             <p className="text-amber-300 text-sm leading-relaxed">
-              Still waiting… Check that your phone received the M-Pesa prompt. Make sure M-Pesa is active and your phone is on.
+              Still waiting… Check that your phone received the M-Pesa prompt.
             </p>
           </div>
         )}
 
-        {/* Timeout recovery panel — replaces the pay button area */}
+        {/* Timeout recovery panel */}
         {timedOut && (
           <div className="bg-[#2a3441] border border-white/10 rounded-[20px] p-5 mb-6">
             <div className="flex items-center gap-3 mb-4">
@@ -481,7 +366,6 @@ export default function MpesaPaymentPage() {
                 <p className="text-gray-400 text-xs mt-0.5">The prompt expired or was not entered in time.</p>
               </div>
             </div>
-
             <div className="space-y-2">
               <button
                 onClick={handleResend}
@@ -492,14 +376,12 @@ export default function MpesaPaymentPage() {
                 </svg>
                 Resend prompt to {sentToPhone}
               </button>
-
               <button
                 onClick={resetToForm}
                 className="w-full bg-[#1e2636] hover:bg-[#263347] text-gray-300 hover:text-white font-medium py-3.5 rounded-[14px] transition-colors text-sm"
               >
                 Use a different number
               </button>
-
               <button
                 onClick={() =>
                   redirectFailed(
@@ -515,7 +397,7 @@ export default function MpesaPaymentPage() {
           </div>
         )}
 
-        {/* Info Box — hidden once timed out (its purpose is served by the panel above) */}
+        {/* Info box */}
         {!timedOut && (
           <div className="bg-[#10b981]/10 border border-[#10b981]/30 rounded-[16px] p-4 mb-8">
             <div className="flex gap-3">
@@ -526,40 +408,14 @@ export default function MpesaPaymentPage() {
               </div>
               <p className="text-gray-300 text-sm leading-relaxed">
                 An M-Pesa prompt will appear on your phone. Enter your PIN{" "}
-                <strong className="text-white">within 60 seconds</strong> to complete the payment. Do not close this screen.
+                <strong className="text-white">within 60 seconds</strong> to complete the payment.
               </p>
             </div>
           </div>
         )}
       </div>
 
-      {/* Payment Button */}
-      <div className="w-full max-w-md mx-auto pb-4">
-        <button
-          onClick={handlePayment}
-          disabled={!isPhoneNumberValid || isProcessing}
-          className="w-full bg-[#10b981] hover:bg-[#059669] text-white text-[17px] font-semibold py-5 px-6 rounded-[20px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-        >
-          {isProcessing ? (
-            <>
-              <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              {processingStage === "sending"
-                ? "Sending prompt..."
-                : `Waiting for PIN... ${secondsLeft}s`}
-            </>
-          ) : (
-            <>
-              Pay Ksh {amount} with M-Pesa
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14 5l7 7m0 0l-7 7m7-7H3" />
-              </svg>
-            </>
-          )}
-        </button>
-      {/* Pay button — hidden when the timeout panel is shown (panel has its own actions) */}
+      {/* Pay button */}
       {!timedOut && (
         <div className="w-full max-w-md mx-auto pb-4">
           <button
@@ -585,7 +441,6 @@ export default function MpesaPaymentPage() {
             )}
           </button>
 
-          {/* Secure footer */}
           <div className="flex items-center justify-center gap-2 mt-6">
             <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />

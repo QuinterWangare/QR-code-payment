@@ -59,7 +59,10 @@ export async function POST(req: NextRequest) {
         message: resultDesc,
         reason,
       });
-      console.log(`❌ Payment failed [${resultCode}] reason=${reason}:`, resultDesc);
+      console.log(
+        `❌ Payment failed [${resultCode}] reason=${reason}:`,
+        resultDesc,
+      );
     }
 
     return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted" });

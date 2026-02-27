@@ -12,7 +12,11 @@ export async function POST(req: NextRequest) {
     if (checkoutRequestId) {
       const callbackResult = getAndDeletePaymentResult(checkoutRequestId);
       if (callbackResult) {
-        console.log("[stkquery] ⚡ Resolved from callback store:", callbackResult.status, callbackResult.reason ?? "");
+        console.log(
+          "[stkquery] ⚡ Resolved from callback store:",
+          callbackResult.status,
+          callbackResult.reason ?? "",
+        );
         return NextResponse.json(callbackResult);
       }
     }
