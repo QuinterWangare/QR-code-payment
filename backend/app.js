@@ -5,6 +5,14 @@ import axios from "axios";
 import moment from "moment";
 import cors from "cors";
 import fs from "fs";
+import Stripe from "stripe";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const _adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter: _adapter });
 
 // ─── Server config ────────────────────────────────────────────────────────────
 const PORT = process.env.PORT || 5000;
@@ -45,6 +53,14 @@ async function getAccessToken() {
   return data.access_token;
 }
 
+  try {
+    const response = await axios.get(url, {
+      headers: {
+        Authorization: auth,
+        "User-Agent":
+          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      },
+    });
 // ─── In-memory payment results store (populated by M-Pesa callback) ───────────
 // NOTE: This is intentionally simple for the sandbox demo. In production,
 // replace with a persistent store (Redis, PostgreSQL, etc.).
@@ -125,6 +141,76 @@ app.post("/api/stkpush", async (req, res, next) => {
       phoneNumber = "254" + String(phoneNumber).slice(1);
     }
 
+  getAccessToken()
+    .then((accessToken) => {
+      const url =
+        "https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest";
+      const auth = "Bearer " + accessToken;
+      const timestamp = moment().format("YYYYMMDDHHmmss");
+      const password = Buffer.from(
+        "174379" +
+          "bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919" +
+          timestamp,
+      ).toString("base64");
+
+      axios
+        .post(
+          url,
+          {
+            BusinessShortCode: "174379",
+            Password: password,
+            Timestamp: timestamp,
+            TransactionType: "CustomerPayBillOnline",
+            Amount: amount,
+            PartyA: phoneNumber,
+            PartyB: "174379",
+            PhoneNumber: phoneNumber,
+            CallBackURL: `${process.env.BACKEND_NGROK_URL}/api/callback`,
+            AccountReference: accountNumber,
+            TransactionDesc: "QR Parking Payment",
+          },
+          {
+            headers: {
+              Authorization: auth,
+            },
+          },
+        )
+        .then(async (response) => {
+          console.log(response.data);
+          const checkoutRequestId = response.data.CheckoutRequestID;
+          // Save pending transaction to DB
+          await prisma.transaction.create({
+            data: {
+              method: "mpesa",
+              status: "pending",
+              amount: parseFloat(amount),
+              phone: phoneNumber,
+              checkoutRequestId,
+              accountReference: accountNumber,
+              description: "QR Parking Payment",
+            },
+          }).catch(console.error);
+          res.status(200).json({
+            msg: "Request successful ✔✔. Please enter M-Pesa PIN to complete the transaction.",
+            status: true,
+            checkoutRequestId,
+          });
+        })
+        .catch((error) => {
+          console.log(error.response?.data || error.message);
+          res.status(500).json({
+            msg: "STK push request failed",
+            status: false,
+          });
+        });
+    })
+    .catch((error) => {
+      console.log(error);
+      res
+        .status(500)
+        .json({ msg: "Failed to get access token", status: false });
+    });
+});
     // ── Safaricom request ───────────────────────────────────────────────────
     const accessToken = await getAccessToken();
     const timestamp = moment().format("YYYYMMDDHHmmss");
@@ -172,6 +258,44 @@ app.post("/api/stkpush", async (req, res, next) => {
   }
 });
 
+app.post("/api/callback", (req, res) => {
+  console.log("STK PUSH CALLBACK");
+  const stkCallback = req.body.Body.stkCallback;
+  const CheckoutRequestID = stkCallback.CheckoutRequestID;
+  const ResultCode = stkCallback.ResultCode;
+  const ResultDesc = stkCallback.ResultDesc;
+
+  if (ResultCode === 0) {
+    const metadata = stkCallback.CallbackMetadata?.Item || [];
+    const amount = metadata.find((i) => i.Name === "Amount")?.Value;
+    const receiptNumber = metadata.find(
+      (i) => i.Name === "MpesaReceiptNumber",
+    )?.Value;
+    const phone = metadata.find((i) => i.Name === "PhoneNumber")?.Value;
+    paymentResults.set(CheckoutRequestID, {
+      status: "success",
+      amount,
+      receiptNumber,
+      phone,
+    });
+    // Update transaction in DB
+    prisma.transaction.updateMany({
+      where: { checkoutRequestId: CheckoutRequestID },
+      data: {
+        status: "success",
+        mpesaReceiptNumber: receiptNumber ? String(receiptNumber) : null,
+        amount: amount ? parseFloat(amount) : undefined,
+        phone: phone ? String(phone) : undefined,
+      },
+    }).catch(console.error);
+    console.log("✅ Payment successful:", {
+      CheckoutRequestID,
+      amount,
+      receiptNumber,
+      phone,
+    });
+  } else {
+    paymentResults.set(CheckoutRequestID, {
 /**
  * POST /api/stkquery
  * Query the current status of an STK Push transaction directly from Safaricom.
@@ -229,6 +353,13 @@ app.post("/api/stkquery", async (req, res, next) => {
       reason: "failed",
       message: resultDesc || "Payment was not completed. Please try again.",
     });
+    // Update transaction in DB
+    prisma.transaction.updateMany({
+      where: { checkoutRequestId: CheckoutRequestID },
+      data: { status: "failed", description: ResultDesc },
+    }).catch(console.error);
+    console.log("❌ Payment failed:", ResultDesc);
+  }
   } catch (err) {
     const errData = err.response?.data;
     const errCode = String(errData?.ResultCode ?? errData?.errorCode ?? "");
@@ -309,6 +440,112 @@ app.use((err, _req, res, _next) => {
   });
 });
 
+/** Stripe - Create Payment Intent */
+app.post("/api/create-payment-intent", async (req, res) => {
+  try {
+    const { amount, currency = "kes" } = req.body;
+
+    if (!amount) {
+      return res.status(400).json({ msg: "Amount is required", status: false });
+    }
+
+    // Stripe expects amount in smallest currency unit (cents/cents equivalent)
+    // For KES, Stripe uses the whole number (KES has no subunits in Stripe)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: currency,
+      payment_method_types: ["card"],
+      metadata: { integration: "qr-parking" },
+    });
+
+    // Save pending Stripe transaction to DB
+    await prisma.transaction.create({
+      data: {
+        method: "visa",
+        status: "pending",
+        amount: parseFloat(amount),
+        currency: currency.toUpperCase(),
+        stripePaymentId: paymentIntent.id,
+        description: "QR Parking Payment - Card",
+      },
+    }).catch(console.error);
+
+    res.status(200).json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      status: true,
+    });
+  } catch (error) {
+    console.log("Stripe error:", error.message);
+    res.status(500).json({ msg: error.message, status: false });
+  }
+});
+
+/** Stripe - Confirm payment status after redirect */
+app.post("/api/stripe-confirm", async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      return res.status(400).json({ msg: "paymentIntentId is required", status: false });
+    }
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const status = paymentIntent.status === "succeeded" ? "success" : "failed";
+    await prisma.transaction.updateMany({
+      where: { stripePaymentId: paymentIntentId },
+      data: { status },
+    });
+    res.json({ status, status: true });
+  } catch (error) {
+    console.log("Stripe confirm error:", error.message);
+    res.status(500).json({ msg: error.message, status: false });
+  }
+});
+
+/** Check M-Pesa transaction status from DB */
+app.get("/api/mpesa-status/:checkoutRequestId", async (req, res) => {
+  const { checkoutRequestId } = req.params;
+  try {
+    const tx = await prisma.transaction.findFirst({
+      where: { checkoutRequestId },
+    });
+    if (!tx) return res.json({ status: "pending" });
+    res.json({ status: tx.status, mpesaReceiptNumber: tx.mpesaReceiptNumber });
+  } catch (error) {
+    console.log("mpesa-status error:", error.message);
+    res.json({ status: "pending" });
+  }
+});
+
+/** Mark an M-Pesa transaction as failed (e.g. client-side timeout) */
+app.post("/api/mpesa-timeout", async (req, res) => {
+  const { checkoutRequestId } = req.body;
+  try {
+    await prisma.transaction.updateMany({
+      where: { checkoutRequestId, status: "pending" },
+      data: { status: "failed" },
+    });
+    res.json({ status: true });
+  } catch (error) {
+    console.log("mpesa-timeout error:", error.message);
+    res.json({ status: false });
+  }
+});
+
+/** Get all transactions */
+app.get("/api/transactions", async (req, res) => {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ transactions, status: true });
+  } catch (error) {
+    console.log("Transactions fetch error:", error.message);
+    res.status(500).json({ msg: error.message, status: false });
+  }
+});
+
+server.listen(port, hostname, () => {
+  console.log(`Server running at http://${hostname}:${port}/`);
 // ─── Start ────────────────────────────────────────────────────────────────────
 server.listen(PORT, HOSTNAME, () => {
   console.log(`✅ Smart QR Pay backend running at http://${HOSTNAME}:${PORT}`);
