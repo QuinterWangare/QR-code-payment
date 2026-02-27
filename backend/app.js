@@ -5,6 +5,14 @@ import axios from "axios";
 import moment from "moment";
 import cors from "cors";
 import fs from "fs";
+import Stripe from "stripe";
+import pkg from "@prisma/client";
+const { PrismaClient } = pkg;
+import { PrismaBetterSqlite3 } from "@prisma/adapter-better-sqlite3";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
+const _adapter = new PrismaBetterSqlite3({ url: process.env.DATABASE_URL });
+const prisma = new PrismaClient({ adapter: _adapter });
 
 const port = 5000;
 const hostname = "localhost";
@@ -46,6 +54,8 @@ async function getAccessToken() {
     const response = await axios.get(url, {
       headers: {
         Authorization: auth,
+        "User-Agent":
+          "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
       },
     });
 
@@ -174,9 +184,21 @@ app.post("/api/stkpush", (req, res) => {
             },
           },
         )
-        .then((response) => {
+        .then(async (response) => {
           console.log(response.data);
           const checkoutRequestId = response.data.CheckoutRequestID;
+          // Save pending transaction to DB
+          await prisma.transaction.create({
+            data: {
+              method: "mpesa",
+              status: "pending",
+              amount: parseFloat(amount),
+              phone: phoneNumber,
+              checkoutRequestId,
+              accountReference: accountNumber,
+              description: "QR Parking Payment",
+            },
+          }).catch(console.error);
           res.status(200).json({
             msg: "Request successful ✔✔. Please enter M-Pesa PIN to complete the transaction.",
             status: true,
@@ -269,7 +291,7 @@ app.post("/api/stkquery", (req, res) => {
     });
 });
 
-app.post("/callback", (req, res) => {
+app.post("/api/callback", (req, res) => {
   console.log("STK PUSH CALLBACK");
   const stkCallback = req.body.Body.stkCallback;
   const CheckoutRequestID = stkCallback.CheckoutRequestID;
@@ -289,6 +311,16 @@ app.post("/callback", (req, res) => {
       receiptNumber,
       phone,
     });
+    // Update transaction in DB
+    prisma.transaction.updateMany({
+      where: { checkoutRequestId: CheckoutRequestID },
+      data: {
+        status: "success",
+        mpesaReceiptNumber: receiptNumber ? String(receiptNumber) : null,
+        amount: amount ? parseFloat(amount) : undefined,
+        phone: phone ? String(phone) : undefined,
+      },
+    }).catch(console.error);
     console.log("✅ Payment successful:", {
       CheckoutRequestID,
       amount,
@@ -300,6 +332,11 @@ app.post("/callback", (req, res) => {
       status: "failed",
       message: ResultDesc,
     });
+    // Update transaction in DB
+    prisma.transaction.updateMany({
+      where: { checkoutRequestId: CheckoutRequestID },
+      data: { status: "failed", description: ResultDesc },
+    }).catch(console.error);
     console.log("❌ Payment failed:", ResultDesc);
   }
 
@@ -390,6 +427,110 @@ app.get("/b2curlrequest", (req, res) => {
         });
     })
     .catch(console.log);
+});
+
+/** Stripe - Create Payment Intent */
+app.post("/api/create-payment-intent", async (req, res) => {
+  try {
+    const { amount, currency = "kes" } = req.body;
+
+    if (!amount) {
+      return res.status(400).json({ msg: "Amount is required", status: false });
+    }
+
+    // Stripe expects amount in smallest currency unit (cents/cents equivalent)
+    // For KES, Stripe uses the whole number (KES has no subunits in Stripe)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(amount * 100),
+      currency: currency,
+      payment_method_types: ["card"],
+      metadata: { integration: "qr-parking" },
+    });
+
+    // Save pending Stripe transaction to DB
+    await prisma.transaction.create({
+      data: {
+        method: "visa",
+        status: "pending",
+        amount: parseFloat(amount),
+        currency: currency.toUpperCase(),
+        stripePaymentId: paymentIntent.id,
+        description: "QR Parking Payment - Card",
+      },
+    }).catch(console.error);
+
+    res.status(200).json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      status: true,
+    });
+  } catch (error) {
+    console.log("Stripe error:", error.message);
+    res.status(500).json({ msg: error.message, status: false });
+  }
+});
+
+/** Stripe - Confirm payment status after redirect */
+app.post("/api/stripe-confirm", async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) {
+      return res.status(400).json({ msg: "paymentIntentId is required", status: false });
+    }
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    const status = paymentIntent.status === "succeeded" ? "success" : "failed";
+    await prisma.transaction.updateMany({
+      where: { stripePaymentId: paymentIntentId },
+      data: { status },
+    });
+    res.json({ status, status: true });
+  } catch (error) {
+    console.log("Stripe confirm error:", error.message);
+    res.status(500).json({ msg: error.message, status: false });
+  }
+});
+
+/** Check M-Pesa transaction status from DB */
+app.get("/api/mpesa-status/:checkoutRequestId", async (req, res) => {
+  const { checkoutRequestId } = req.params;
+  try {
+    const tx = await prisma.transaction.findFirst({
+      where: { checkoutRequestId },
+    });
+    if (!tx) return res.json({ status: "pending" });
+    res.json({ status: tx.status, mpesaReceiptNumber: tx.mpesaReceiptNumber });
+  } catch (error) {
+    console.log("mpesa-status error:", error.message);
+    res.json({ status: "pending" });
+  }
+});
+
+/** Mark an M-Pesa transaction as failed (e.g. client-side timeout) */
+app.post("/api/mpesa-timeout", async (req, res) => {
+  const { checkoutRequestId } = req.body;
+  try {
+    await prisma.transaction.updateMany({
+      where: { checkoutRequestId, status: "pending" },
+      data: { status: "failed" },
+    });
+    res.json({ status: true });
+  } catch (error) {
+    console.log("mpesa-timeout error:", error.message);
+    res.json({ status: false });
+  }
+});
+
+/** Get all transactions */
+app.get("/api/transactions", async (req, res) => {
+  try {
+    const transactions = await prisma.transaction.findMany({
+      orderBy: { createdAt: "desc" },
+    });
+    res.json({ transactions, status: true });
+  } catch (error) {
+    console.log("Transactions fetch error:", error.message);
+    res.status(500).json({ msg: error.message, status: false });
+  }
 });
 
 server.listen(port, hostname, () => {

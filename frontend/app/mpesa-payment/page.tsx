@@ -1,22 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
+
+const TIMEOUT_MS = 90_000; // 90 seconds to enter PIN
 
 export default function MpesaPaymentPage() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStage, setProcessingStage] = useState<"sending" | "waiting">("sending");
+  const [secondsLeft, setSecondsLeft] = useState(TIMEOUT_MS / 1000);
   const [error, setError] = useState("");
+  const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const hardTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const amount = 10; // Fixed amount from QR code
+  const amount = 10;
+
+  const clearAllTimers = () => {
+    if (pollTimerRef.current) clearTimeout(pollTimerRef.current);
+    if (hardTimerRef.current) clearTimeout(hardTimerRef.current);
+    if (countdownRef.current) clearInterval(countdownRef.current);
+  };
 
   const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // Remove any non-digit characters
     const value = e.target.value.replace(/\D/g, "");
-
-    // Limit to 9 digits (after +254)
     if (value.length <= 9) {
       setPhoneNumber(value);
       setError("");
@@ -24,7 +33,6 @@ export default function MpesaPaymentPage() {
   };
 
   const handlePayment = async () => {
-    // Validate phone number
     if (phoneNumber.length !== 9) {
       setError("Please enter a valid phone number");
       return;
@@ -40,11 +48,7 @@ export default function MpesaPaymentPage() {
       const response = await fetch("/api/stkpush", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone: formattedPhone,
-          amount: amount,
-          accountNumber: "QR-PAY",
-        }),
+        body: JSON.stringify({ phone: formattedPhone, amount, accountNumber: "QR-PAY" }),
       });
 
       const data = await response.json();
@@ -55,47 +59,76 @@ export default function MpesaPaymentPage() {
 
       const checkoutRequestId = data.checkoutRequestId;
       setProcessingStage("waiting");
+      setSecondsLeft(TIMEOUT_MS / 1000);
 
-      // Wait 5s before first query (give user time to enter PIN)
-      // Then poll every 5 seconds for up to 90 seconds
-      const maxAttempts = 18;
-      let attempts = 0;
+      // --- countdown display ---
+      countdownRef.current = setInterval(() => {
+        setSecondsLeft((s) => (s > 0 ? s - 1 : 0));
+      }, 1000);
 
-      const poll = async (): Promise<void> => {
-        if (attempts >= maxAttempts) {
-          setError("Payment confirmation timed out. If you entered the PIN, please check your M-Pesa messages.");
-          setIsProcessing(false);
-          return;
-        }
-
-        attempts++;
-
+      // --- hard timeout: mark failed + go home ---
+      hardTimerRef.current = setTimeout(async () => {
+        clearAllTimers();
+        // Mark transaction as failed in DB
         try {
-          const statusRes = await fetch("/api/stkquery", {
+          await fetch("/api/mpesa-timeout", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ checkoutRequestId }),
           });
-          const statusData = await statusRes.json();
+        } catch { /* ignore */ }
+        router.push("/");
+      }, TIMEOUT_MS);
+
+      // --- poll DB status every 3 seconds ---
+      const pollDB = async () => {
+        try {
+          const res = await fetch(`/api/mpesa-status/${encodeURIComponent(checkoutRequestId)}`);
+          const statusData = await res.json();
 
           if (statusData.status === "success") {
-            router.push("/payment-success");
+            clearAllTimers();
+            router.push("/payment-success?method=mpesa");
+            return;
           } else if (statusData.status === "failed") {
-            setError(statusData.message || "Payment was cancelled or failed. Please try again.");
+            clearAllTimers();
+            setError("Payment was cancelled or failed. Please try again.");
             setIsProcessing(false);
-          } else {
-            // Still pending — wait 5s and try again
-            setTimeout(poll, 5000);
+            return;
           }
-        } catch {
-          setTimeout(poll, 5000);
-        }
+        } catch { /* ignore, retry */ }
+
+        // Still pending — also double-check via Safaricom STK query
+        try {
+          const stkRes = await fetch("/api/stkquery", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ checkoutRequestId }),
+          });
+          const stkData = await stkRes.json();
+
+          if (stkData.status === "success") {
+            clearAllTimers();
+            router.push("/payment-success?method=mpesa");
+            return;
+          } else if (stkData.status === "failed") {
+            clearAllTimers();
+            setError(stkData.message || "Payment was cancelled or failed.");
+            setIsProcessing(false);
+            return;
+          }
+        } catch { /* ignore */ }
+
+        // Still pending — schedule next poll
+        pollTimerRef.current = setTimeout(pollDB, 3000);
       };
 
-      setTimeout(poll, 5000);
+      // First check after 5s (time for user to open M-Pesa app)
+      pollTimerRef.current = setTimeout(pollDB, 5000);
 
-    } catch (err: any) {
-      setError(err.message || "Payment failed. Please try again.");
+    } catch (err: unknown) {
+      clearAllTimers();
+      setError(err instanceof Error ? err.message : "Payment failed. Please try again.");
       setIsProcessing(false);
     }
   };
@@ -206,7 +239,9 @@ export default function MpesaPaymentPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              {processingStage === "sending" ? "Sending prompt..." : "Waiting for PIN..."}
+              {processingStage === "sending"
+                ? "Sending prompt..."
+                : `Waiting for PIN... ${secondsLeft}s`}
             </>
           ) : (
             <>
