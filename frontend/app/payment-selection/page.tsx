@@ -84,9 +84,8 @@ export default function PaymentSelectionPage() {
       {/* ─── QR Scanned toast (auto-dismisses after 10 s) ──────────────────── */}
       {showQrBadge && (
         <div
-          className={`fixed top-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-[#10b981] text-white px-5 py-3 rounded-full shadow-lg text-sm font-medium transition-all duration-700 ${
-            qrBadgeFading ? "opacity-0 -translate-y-2" : "opacity-100 translate-y-0"
-          }`}
+          className={`fixed top-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-[#10b981] text-white px-5 py-3 rounded-full shadow-lg text-sm font-medium transition-all duration-700 ${qrBadgeFading ? "opacity-0 -translate-y-2" : "opacity-100 translate-y-0"
+            }`}
         >
           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
