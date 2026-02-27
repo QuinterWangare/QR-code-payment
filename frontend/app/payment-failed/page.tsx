@@ -20,7 +20,7 @@ export default function PaymentFailedPage() {
         <div className="relative mb-8">
           {/* Glowing Circle */}
           <div className="absolute inset-0 bg-[#ef4444] opacity-20 blur-3xl rounded-full"></div>
-          
+
           {/* Main Circle */}
           <div className="relative w-32 h-32 bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full flex items-center justify-center border-4 border-[#ef4444]/30">
             <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -45,7 +45,7 @@ export default function PaymentFailedPage() {
             Amount
           </p>
           <p className="text-white text-[48px] font-bold text-center leading-none">
-            Ksh 200
+            Ksh 10
           </p>
         </div>
       </div>
