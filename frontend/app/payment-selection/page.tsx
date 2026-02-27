@@ -6,10 +6,19 @@ import { useEffect, useState } from "react";
 export default function PaymentSelectionPage() {
   const router = useRouter();
   const [fadeIn, setFadeIn] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [showQrBadge, setShowQrBadge] = useState(true);
+  const [qrBadgeFading, setQrBadgeFading] = useState(false);
 
-  // Animate page entrance
   useEffect(() => {
     setFadeIn(true);
+    // Start fading out at 7 s, fully remove at 10 s
+    const fadeTimer = setTimeout(() => setQrBadgeFading(true), 7000);
+    const hideTimer = setTimeout(() => setShowQrBadge(false), 10000);
+    return () => {
+      clearTimeout(fadeTimer);
+      clearTimeout(hideTimer);
+    };
   }, []);
 
   const handleMpesaPayment = () => {
@@ -21,14 +30,14 @@ export default function PaymentSelectionPage() {
   };
 
   const handleCancel = () => {
-    // Show confirmation before canceling
-    if (confirm("Are you sure you want to cancel the payment?")) {
-      window.close(); // Close the browser tab (works on mobile)
-      // Fallback if window.close() doesn't work
-      setTimeout(() => {
-        router.push("/");
-      }, 100);
-    }
+    setShowCancelModal(true);
+  };
+
+  const confirmCancel = () => {
+    setShowCancelModal(false);
+    window.close(); // Works when page was opened by another window / scanner
+    // Fallback: navigate home if window.close() was blocked
+    setTimeout(() => router.push("/"), 100);
   };
 
   return (
@@ -36,15 +45,54 @@ export default function PaymentSelectionPage() {
       className={`min-h-screen bg-[#1a1f2e] flex flex-col items-center px-6 py-8 transition-opacity duration-500 ${fadeIn ? "opacity-100" : "opacity-0"
         }`}
     >
-      {/* Welcome Message (shows user scanned successfully) */}
-      <div className="w-full max-w-md mb-6 text-center">
-        <div className="inline-flex items-center gap-2 bg-[#10b981]/20 text-[#10b981] px-4 py-2 rounded-full text-sm mb-4">
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+      {/* ─── Cancel Confirmation Modal ─────────────────────────────────────── */}
+      {showCancelModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm px-6">
+          <div className="w-full max-w-sm bg-[#242b38] rounded-[24px] p-8 shadow-2xl">
+            {/* Icon */}
+            <div className="flex justify-center mb-5">
+              <div className="w-14 h-14 bg-red-500/20 rounded-full flex items-center justify-center">
+                <svg className="w-7 h-7 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </div>
+            </div>
+            {/* Text */}
+            <h2 className="text-white text-xl font-bold text-center mb-2">Cancel Payment?</h2>
+            <p className="text-gray-400 text-sm text-center mb-8">
+              Your payment has not been processed. Are you sure you want to leave?
+            </p>
+            {/* Actions */}
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={confirmCancel}
+                className="w-full bg-red-500 hover:bg-red-600 text-white font-semibold py-4 rounded-[16px] transition-colors"
+              >
+                Yes, Cancel Payment
+              </button>
+              <button
+                onClick={() => setShowCancelModal(false)}
+                className="w-full bg-[#2a3441] hover:bg-[#343d4d] text-white font-semibold py-4 rounded-[16px] transition-colors"
+              >
+                No, Go Back
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── QR Scanned toast (auto-dismisses after 10 s) ──────────────────── */}
+      {showQrBadge && (
+        <div
+          className={`fixed top-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-[#10b981] text-white px-5 py-3 rounded-full shadow-lg text-sm font-medium transition-all duration-700 ${qrBadgeFading ? "opacity-0 -translate-y-2" : "opacity-100 translate-y-0"
+            }`}
+        >
+          <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
           </svg>
           QR Code Scanned Successfully
         </div>
-      </div>
+      )}
 
       {/* Header */}
       <div className="w-full max-w-md text-center mb-12">

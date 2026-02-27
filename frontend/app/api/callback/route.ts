@@ -1,5 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
-import paymentResults from "../payment-store";
+import { setPaymentResult } from "../payment-store";
+
+// Maps Safaricom ResultCode → reason string (must match payment-failed page configs)
+const CALLBACK_REASON_MAP: Record<number, string> = {
+  1: "insufficient_balance",
+  2: "below_minimum",
+  3: "above_maximum",
+  4: "daily_limit",
+  5: "below_min_balance",
+  6: "invalid_sender",
+  7: "invalid_receiver",
+  11: "invalid_account",
+  17: "internal_error",
+  1001: "subscriber_locked",
+  1025: "duplicate_transaction",
+  1031: "duplicate_transaction",
+  1032: "cancelled",
+  1037: "timeout",
+  2001: "wrong_pin",
+};
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,23 +41,28 @@ export async function POST(req: NextRequest) {
         (i: any) => i.Name === "MpesaReceiptNumber",
       )?.Value;
       const phone = metadata.find((i: any) => i.Name === "PhoneNumber")?.Value;
-      paymentResults.set(checkoutRequestId, {
+      setPaymentResult(checkoutRequestId, {
         status: "success",
         amount,
         receiptNumber,
         phone,
       });
-      console.log("✅ Payment successful:", {
+      console.log("✅ Callback — payment successful:", {
         checkoutRequestId,
         amount,
         receiptNumber,
       });
     } else {
-      paymentResults.set(checkoutRequestId, {
+      const reason = CALLBACK_REASON_MAP[resultCode] ?? "failed";
+      setPaymentResult(checkoutRequestId, {
         status: "failed",
         message: resultDesc,
+        reason,
       });
-      console.log("❌ Payment failed:", resultDesc);
+      console.log(
+        `❌ Payment failed [${resultCode}] reason=${reason}:`,
+        resultDesc,
+      );
     }
 
     return NextResponse.json({ ResultCode: 0, ResultDesc: "Accepted" });

@@ -1,16 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAndDeletePaymentResult } from "../../payment-store";
 
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ checkoutRequestId: string }> },
 ) {
   const { checkoutRequestId } = await params;
-  const result = getAndDeletePaymentResult(checkoutRequestId);
-
-  if (!result) {
+  try {
+    const res = await fetch(
+      `${process.env.BACKEND_URL}/api/mpesa-status/${encodeURIComponent(checkoutRequestId)}`,
+    );
+    const data = await res.json();
+    return NextResponse.json(data);
+  } catch {
     return NextResponse.json({ status: "pending" });
   }
-
-  return NextResponse.json(result);
 }

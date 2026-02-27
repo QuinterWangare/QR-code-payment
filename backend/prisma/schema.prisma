@@ -1,0 +1,27 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model Transaction {
+  id                 Int      @id @default(autoincrement())
+  method             String   // "mpesa" or "visa"
+  status             String   // "pending" | "success" | "failed"
+  amount             Float
+  currency           String   @default("KES")
+  phone              String?  // M-Pesa phone number
+  checkoutRequestId  String?  // M-Pesa CheckoutRequestID
+  mpesaReceiptNumber String?  // M-Pesa receipt
+  stripePaymentId    String?  // Stripe PaymentIntent ID
+  accountReference   String?  // M-Pesa account reference
+  description        String?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import QRCode from "react-qr-code";
 
 export default function AdminQRPage() {
-  const [showQR, setShowQR] = useState(true);
+  const [copied, setCopied] = useState(false);
 
   // Payment data that will be encoded in QR
   const paymentData = {
@@ -44,7 +44,8 @@ export default function AdminQRPage() {
 
   const copyPaymentLink = () => {
     navigator.clipboard.writeText(paymentData.paymentUrl);
-    alert("Payment link copied!");
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
   };
 
   return (
@@ -52,52 +53,45 @@ export default function AdminQRPage() {
       <div className="w-full max-w-2xl">
         {/* Admin Header */}
         <div className="text-center mb-8">
-          <h1 className="text-white text-[36px] font-bold mb-3">
-            Parking Payment QR Code
+          <h1 className="text-white text-[28px] sm:text-[36px] font-bold mb-3">
+            Smart QR Scan To Pay
           </h1>
           <p className="text-gray-400 text-lg">
-            Admin/Testing Page - Print this QR code for customers
+            Print this QR code for customers
           </p>
         </div>
 
         {/* QR Code Display */}
-        <div className="bg-[#2a3441] rounded-[32px] p-8 mb-6">
-          <div className="bg-white rounded-[24px] p-8 flex flex-col items-center">
-            {showQR ? (
-              <>
-                <QRCode
-                  id="qr-code"
-                  value={qrCodeValue}
-                  size={320}
-                  level="H"
-                  bgColor="#ffffff"
-                  fgColor="#1e293b"
-                />
+        <div className="bg-[#2a3441] rounded-[32px] p-4 sm:p-8 mb-6">
+          <div className="bg-white rounded-[24px] p-4 sm:p-8 flex flex-col items-center">
+            <QRCode
+              id="qr-code"
+              value={qrCodeValue}
+              size={320}
+              level="H"
+              bgColor="#ffffff"
+              fgColor="#1e293b"
+              style={{ width: "100%", height: "auto", maxWidth: "320px" }}
+            />
 
-                {/* Center Logo */}
-                <div className="mt-6 w-16 h-16 bg-[#1e293b] rounded-full flex items-center justify-center">
-                  <span className="text-white text-3xl font-bold">P</span>
-                </div>
+            {/* Center Logo */}
+            <div className="mt-6 w-16 h-16 bg-[#1e293b] rounded-full flex items-center justify-center">
+              <span className="text-white text-3xl font-bold">P</span>
+            </div>
 
-                <div className="mt-6 text-center">
-                  <p className="text-[#1e293b] text-sm uppercase tracking-wider mb-2">
-                    Daily Rate
-                  </p>
-                  <p className="text-[#1e293b] text-4xl font-bold">
-                    Ksh 10
-                  </p>
-                </div>
-              </>
-            ) : (
-              <div className="py-20">
-                <p className="text-gray-600 text-lg">QR Code Hidden</p>
-              </div>
-            )}
+            <div className="mt-6 text-center">
+              <p className="text-[#1e293b] text-sm uppercase tracking-wider mb-2">
+                Daily Rate
+              </p>
+              <p className="text-[#1e293b] text-4xl font-bold">
+                Ksh 10
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Action Buttons */}
-        <div className="grid grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-6 relative">
           <button
             onClick={handleDownloadQR}
             className="bg-[#10b981] hover:bg-[#059669] text-white py-4 px-6 rounded-[16px] font-semibold transition-colors flex items-center justify-center gap-2"
@@ -108,26 +102,27 @@ export default function AdminQRPage() {
             Download QR
           </button>
 
-          <button
-            onClick={copyPaymentLink}
-            className="bg-[#3b82f6] hover:bg-[#2563eb] text-white py-4 px-6 rounded-[16px] font-semibold transition-colors flex items-center justify-center gap-2"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-            </svg>
-            Copy Link
-          </button>
+          <div className="relative">
+            <button
+              onClick={copyPaymentLink}
+              className="w-full bg-[#3b82f6] hover:bg-[#2563eb] text-white py-4 px-6 rounded-[16px] font-semibold transition-colors flex items-center justify-center gap-2"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+              </svg>
+              Copy Link
+            </button>
+            {/* Copied popup */}
+            {copied && (
+              <div className="absolute -top-11 left-1/2 -translate-x-1/2 bg-[#1a1f2e] border border-[#10b981] text-[#10b981] text-sm font-medium px-4 py-2 rounded-[10px] whitespace-nowrap shadow-lg">
+                ✓ Link copied!
+              </div>
+            )}
+          </div>
         </div>
 
-        <button
-          onClick={() => setShowQR(!showQR)}
-          className="w-full bg-[#2a3441] hover:bg-[#343d4d] text-white py-4 px-6 rounded-[16px] font-semibold transition-colors"
-        >
-          {showQR ? "Hide QR Code" : "Show QR Code"}
-        </button>
-
         {/* Info Box */}
-        <div className="mt-8 bg-[#2a3441] rounded-[20px] p-6">
+        <div className="mt-2 bg-[#2a3441] rounded-[20px] p-6">
           <h3 className="text-white text-lg font-semibold mb-3 flex items-center gap-2">
             <svg className="w-5 h-5 text-[#10b981]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -141,16 +136,6 @@ export default function AdminQRPage() {
             <li>Customer selects M-Pesa or Visa payment</li>
             <li>Payment is processed securely</li>
           </ol>
-        </div>
-
-        {/* Testing Link */}
-        <div className="mt-6 text-center">
-          <a
-            href="/payment-selection"
-            className="text-[#3b82f6] hover:text-[#60a5fa] text-sm underline"
-          >
-            Test Payment Flow →
-          </a>
         </div>
       </div>
     </div>

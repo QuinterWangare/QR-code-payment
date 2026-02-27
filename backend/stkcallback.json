@@ -1,30 +1,30 @@
 {
   "Body": {
     "stkCallback": {
-      "MerchantRequestID": "25505-162427436-1",
-      "CheckoutRequestID": "ws_CO_07012024170905625768168060",
+      "MerchantRequestID": "c35f-4cce-81a6-ad6a25b3e59c7517",
+      "CheckoutRequestID": "ws_CO_27022026130624731768174504",
       "ResultCode": 0,
       "ResultDesc": "The service request is processed successfully.",
       "CallbackMetadata": {
         "Item": [
           {
             "Name": "Amount",
-            "Value": 2
+            "Value": 10
           },
           {
             "Name": "MpesaReceiptNumber",
-            "Value": "SA77CVC7PZ"
+            "Value": "UBR107U6K9"
           },
           {
             "Name": "Balance"
           },
           {
             "Name": "TransactionDate",
-            "Value": 20240107170703
+            "Value": 20260227130634
           },
           {
             "Name": "PhoneNumber",
-            "Value": 254768168060
+            "Value": 254768174504
           }
         ]
       }
