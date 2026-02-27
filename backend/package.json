@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "description": "Mpesa Api in node js",
   "main": "app.js",
-  "type":"module",
+  "type": "module",
   "scripts": {
-    "start": "node app.js",
-    "dev": "nodemon app.js"
+    "start": "node --env-file=.env app.js",
+    "dev": "nodemon --exec 'node --env-file=.env' app.js"
   },
   "keywords": [
     "Mpesa"

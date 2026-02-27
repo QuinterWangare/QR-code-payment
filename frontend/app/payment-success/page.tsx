@@ -22,7 +22,7 @@ export default function PaymentSuccessPage() {
         <div className="relative mb-8">
           {/* Glowing Circle */}
           <div className="absolute inset-0 bg-[#10b981] opacity-20 blur-3xl rounded-full"></div>
-          
+
           {/* Main Circle */}
           <div className="relative w-32 h-32 bg-gradient-to-br from-[#10b981] to-[#059669] rounded-full flex items-center justify-center border-4 border-[#10b981]/30">
             <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -47,7 +47,7 @@ export default function PaymentSuccessPage() {
             Amount Paid
           </p>
           <p className="text-white text-[48px] font-bold text-center leading-none">
-            Ksh 200
+            Ksh 10
           </p>
         </div>
       </div>

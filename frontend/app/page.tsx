@@ -9,12 +9,12 @@ export default function AdminQRPage() {
   // Payment data that will be encoded in QR
   const paymentData = {
     merchantId: "PARKING_MERCHANT_001",
-    amount: 200,
+    amount: 10,
     currency: "KSH",
     type: "parking_payment",
     description: "Parking Payment",
     // This is the URL that will open when QR is scanned
-    paymentUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/payment-selection`
+    paymentUrl: `${process.env.NEXT_PUBLIC_APP_URL}/payment-selection`
   };
 
   // The QR code contains the direct URL to payment selection
@@ -26,19 +26,19 @@ export default function AdminQRPage() {
     const canvas = document.createElement("canvas");
     const ctx = canvas.getContext("2d");
     const img = new Image();
-    
+
     img.onload = () => {
       canvas.width = img.width;
       canvas.height = img.height;
       ctx?.drawImage(img, 0, 0);
       const pngFile = canvas.toDataURL("image/png");
-      
+
       const downloadLink = document.createElement("a");
       downloadLink.download = "parking-payment-qr.png";
       downloadLink.href = pngFile;
       downloadLink.click();
     };
-    
+
     img.src = "data:image/svg+xml;base64," + btoa(svgData);
   };
 
@@ -73,7 +73,7 @@ export default function AdminQRPage() {
                   bgColor="#ffffff"
                   fgColor="#1e293b"
                 />
-                
+
                 {/* Center Logo */}
                 <div className="mt-6 w-16 h-16 bg-[#1e293b] rounded-full flex items-center justify-center">
                   <span className="text-white text-3xl font-bold">P</span>
@@ -84,7 +84,7 @@ export default function AdminQRPage() {
                     Daily Rate
                   </p>
                   <p className="text-[#1e293b] text-4xl font-bold">
-                    Ksh 200
+                    Ksh 10
                   </p>
                 </div>
               </>

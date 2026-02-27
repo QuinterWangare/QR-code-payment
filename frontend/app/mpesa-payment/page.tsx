@@ -7,14 +7,15 @@ export default function MpesaPaymentPage() {
   const router = useRouter();
   const [phoneNumber, setPhoneNumber] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState<"sending" | "waiting">("sending");
   const [error, setError] = useState("");
 
-  const amount = 200; // Fixed amount from QR code
+  const amount = 10; // Fixed amount from QR code
 
   const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // Remove any non-digit characters
     const value = e.target.value.replace(/\D/g, "");
-    
+
     // Limit to 9 digits (after +254)
     if (value.length <= 9) {
       setPhoneNumber(value);
@@ -30,19 +31,71 @@ export default function MpesaPaymentPage() {
     }
 
     setIsProcessing(true);
+    setProcessingStage("sending");
     setError("");
 
     try {
-      // TODO: Dev 2 - Integrate with Daraja API here
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // For now, redirect to success page
-      // Later, this will wait for STK Push callback
-      router.push("/payment-success");
-      
-    } catch (err) {
-      setError("Payment failed. Please try again.");
+      const formattedPhone = `254${phoneNumber}`;
+
+      const response = await fetch("/api/stkpush", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone: formattedPhone,
+          amount: amount,
+          accountNumber: "QR-PAY",
+        }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok || !data.status) {
+        throw new Error(data.msg || "Payment initiation failed");
+      }
+
+      const checkoutRequestId = data.checkoutRequestId;
+      setProcessingStage("waiting");
+
+      // Wait 5s before first query (give user time to enter PIN)
+      // Then poll every 5 seconds for up to 90 seconds
+      const maxAttempts = 18;
+      let attempts = 0;
+
+      const poll = async (): Promise<void> => {
+        if (attempts >= maxAttempts) {
+          setError("Payment confirmation timed out. If you entered the PIN, please check your M-Pesa messages.");
+          setIsProcessing(false);
+          return;
+        }
+
+        attempts++;
+
+        try {
+          const statusRes = await fetch("/api/stkquery", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ checkoutRequestId }),
+          });
+          const statusData = await statusRes.json();
+
+          if (statusData.status === "success") {
+            router.push("/payment-success");
+          } else if (statusData.status === "failed") {
+            setError(statusData.message || "Payment was cancelled or failed. Please try again.");
+            setIsProcessing(false);
+          } else {
+            // Still pending — wait 5s and try again
+            setTimeout(poll, 5000);
+          }
+        } catch {
+          setTimeout(poll, 5000);
+        }
+      };
+
+      setTimeout(poll, 5000);
+
+    } catch (err: any) {
+      setError(err.message || "Payment failed. Please try again.");
       setIsProcessing(false);
     }
   };
@@ -53,7 +106,7 @@ export default function MpesaPaymentPage() {
     <div className="min-h-screen bg-[#1a1f2e] flex flex-col px-6 py-8">
       {/* Back Button */}
       <div className="w-full max-w-md mx-auto mb-6">
-        <button 
+        <button
           onClick={() => router.back()}
           className="text-white p-2 hover:bg-[#2a3441] rounded-lg transition-colors"
           aria-label="Go back"
@@ -70,7 +123,7 @@ export default function MpesaPaymentPage() {
         <h1 className="text-white text-[32px] font-bold mb-8">
           M-Pesa Payment
         </h1>
-        
+
         <p className="text-gray-400 text-sm uppercase tracking-[0.2em] mb-3">
           Total Amount
         </p>
@@ -153,7 +206,7 @@ export default function MpesaPaymentPage() {
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Processing...
+              {processingStage === "sending" ? "Sending prompt..." : "Waiting for PIN..."}
             </>
           ) : (
             <>

@@ -32,10 +32,9 @@ export default function PaymentSelectionPage() {
   };
 
   return (
-    <div 
-      className={`min-h-screen bg-[#1a1f2e] flex flex-col items-center px-6 py-8 transition-opacity duration-500 ${
-        fadeIn ? "opacity-100" : "opacity-0"
-      }`}
+    <div
+      className={`min-h-screen bg-[#1a1f2e] flex flex-col items-center px-6 py-8 transition-opacity duration-500 ${fadeIn ? "opacity-100" : "opacity-0"
+        }`}
     >
       {/* Welcome Message (shows user scanned successfully) */}
       <div className="w-full max-w-md mb-6 text-center">
@@ -56,14 +55,14 @@ export default function PaymentSelectionPage() {
           Total Amount
         </p>
         <p className="text-white text-[56px] font-bold leading-none">
-          Ksh 200
+          Ksh 10
         </p>
       </div>
 
       {/* Payment Methods Section */}
       <div className="w-full max-w-md flex-1">
         <p className="text-gray-400 text-base mb-6">Select Payment Method</p>
-        
+
         <div className="space-y-4">
           {/* M-Pesa Option */}
           <button
@@ -85,10 +84,10 @@ export default function PaymentSelectionPage() {
             </div>
 
             {/* Arrow Icon */}
-            <svg 
-              className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -115,10 +114,10 @@ export default function PaymentSelectionPage() {
             </div>
 
             {/* Arrow Icon */}
-            <svg 
-              className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors" 
-              fill="none" 
-              stroke="currentColor" 
+            <svg
+              className="w-6 h-6 text-gray-400 group-hover:text-white transition-colors"
+              fill="none"
+              stroke="currentColor"
               viewBox="0 0 24 24"
             >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
