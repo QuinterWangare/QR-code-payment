@@ -116,13 +116,13 @@ function PaymentFailedContent() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1f2e] flex flex-col items-center justify-between px-6 py-8">
+    <div className="min-h-screen bg-[#1a1f2e] flex flex-col items-center justify-between px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md">
         {/* Error Icon */}
         <div className="relative mb-6">
           <div className="absolute inset-0 bg-[#ef4444] opacity-20 blur-3xl rounded-full"></div>
-          <div className="relative w-28 h-28 bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full flex items-center justify-center border-4 border-[#ef4444]/30">
-            <svg className="w-14 h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="relative w-20 h-20 sm:w-28 sm:h-28 bg-gradient-to-br from-[#ef4444] to-[#dc2626] rounded-full flex items-center justify-center border-4 border-[#ef4444]/30">
+            <svg className="w-10 h-10 sm:w-14 sm:h-14 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </div>
@@ -134,7 +134,7 @@ function PaymentFailedContent() {
         </span>
 
         {/* Title */}
-        <h1 className="text-white text-[30px] font-bold mb-3 text-center">
+        <h1 className="text-white text-[24px] sm:text-[30px] font-bold mb-3 text-center">
           {config.title}
         </h1>
 
@@ -179,14 +179,14 @@ function PaymentFailedContent() {
       <div className="w-full max-w-md space-y-4 pt-8 pb-4">
         <button
           onClick={handleRetry}
-          className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white text-[17px] font-semibold py-5 px-6 rounded-[20px] transition-colors"
+          className="w-full bg-[#ef4444] hover:bg-[#dc2626] text-white text-[15px] sm:text-[17px] font-semibold py-4 sm:py-5 px-6 rounded-[20px] transition-colors"
         >
           Try Again
         </button>
 
         <button
           onClick={handleClose}
-          className="w-full bg-transparent border-2 border-[#2a3441] hover:border-gray-600 text-white text-[17px] font-semibold py-5 px-6 rounded-[20px] transition-colors"
+          className="w-full bg-transparent border-2 border-[#2a3441] hover:border-gray-600 text-white text-[15px] sm:text-[17px] font-semibold py-4 sm:py-5 px-6 rounded-[20px] transition-colors"
         >
           Close
         </button>

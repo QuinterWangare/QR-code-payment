@@ -42,7 +42,7 @@ export default function PaymentSelectionPage() {
 
   return (
     <div
-      className={`min-h-screen bg-[#1a1f2e] flex flex-col items-center px-6 py-8 transition-opacity duration-500 ${fadeIn ? "opacity-100" : "opacity-0"
+      className={`min-h-screen bg-[#1a1f2e] flex flex-col items-center px-4 sm:px-6 py-6 sm:py-8 transition-opacity duration-500 ${fadeIn ? "opacity-100" : "opacity-0"
         }`}
     >
       {/* ─── Cancel Confirmation Modal ─────────────────────────────────────── */}
@@ -84,7 +84,7 @@ export default function PaymentSelectionPage() {
       {/* ─── QR Scanned toast (auto-dismisses after 10 s) ──────────────────── */}
       {showQrBadge && (
         <div
-          className={`fixed top-5 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-[#10b981] text-white px-5 py-3 rounded-full shadow-lg text-sm font-medium transition-all duration-700 ${qrBadgeFading ? "opacity-0 -translate-y-2" : "opacity-100 translate-y-0"
+          className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2 bg-[#10b981] text-white px-5 py-3 rounded-full shadow-lg text-sm font-medium transition-all duration-700 ${qrBadgeFading ? "opacity-0 translate-y-2" : "opacity-100 translate-y-0"
             }`}
         >
           <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -95,14 +95,14 @@ export default function PaymentSelectionPage() {
       )}
 
       {/* Header */}
-      <div className="w-full max-w-md text-center mb-12">
-        <h1 className="text-white text-[32px] font-bold mb-8">
+      <div className="w-full max-w-md text-center mb-8 sm:mb-12">
+        <h1 className="text-white text-[26px] sm:text-[32px] font-bold mb-6 sm:mb-8">
           Confirm Payment
         </h1>
         <p className="text-gray-400 text-sm uppercase tracking-[0.2em] mb-3">
           Total Amount
         </p>
-        <p className="text-white text-[56px] font-bold leading-none">
+        <p className="text-white text-[42px] sm:text-[56px] font-bold leading-none">
           Ksh 10
         </p>
       </div>
@@ -115,11 +115,11 @@ export default function PaymentSelectionPage() {
           {/* M-Pesa Option */}
           <button
             onClick={handleMpesaPayment}
-            className="w-full bg-[#2a3441] rounded-[24px] p-6 flex items-center gap-4 hover:bg-[#343d4d] active:scale-[0.98] transition-all group"
+            className="w-full bg-[#2a3441] rounded-[20px] sm:rounded-[24px] p-4 sm:p-6 flex items-center gap-3 sm:gap-4 hover:bg-[#343d4d] active:scale-[0.98] transition-all group"
           >
             {/* M-Pesa Icon */}
-            <div className="w-16 h-16 bg-[#10b981] rounded-[16px] flex items-center justify-center flex-shrink-0">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#10b981] rounded-[12px] sm:rounded-[16px] flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="6" y="4" width="4" height="16" rx="1" />
                 <rect x="14" y="8" width="4" height="12" rx="1" />
               </svg>
@@ -127,8 +127,8 @@ export default function PaymentSelectionPage() {
 
             {/* Text Content */}
             <div className="flex-1 text-left">
-              <h3 className="text-white text-xl font-semibold mb-1">M-Pesa</h3>
-              <p className="text-gray-400 text-sm">Instant mobile money</p>
+              <h3 className="text-white text-base sm:text-xl font-semibold mb-0.5 sm:mb-1">M-Pesa</h3>
+              <p className="text-gray-400 text-xs sm:text-sm">Instant mobile money</p>
             </div>
 
             {/* Arrow Icon */}
@@ -145,11 +145,11 @@ export default function PaymentSelectionPage() {
           {/* Visa Card Option */}
           <button
             onClick={handleVisaPayment}
-            className="w-full bg-[#2a3441] rounded-[24px] p-6 flex items-center gap-4 hover:bg-[#343d4d] active:scale-[0.98] transition-all group"
+            className="w-full bg-[#2a3441] rounded-[20px] sm:rounded-[24px] p-4 sm:p-6 flex items-center gap-3 sm:gap-4 hover:bg-[#343d4d] active:scale-[0.98] transition-all group"
           >
             {/* Visa Icon */}
-            <div className="w-16 h-16 bg-[#1e3a8a] rounded-[16px] flex items-center justify-center flex-shrink-0">
-              <svg className="w-8 h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <div className="w-12 h-12 sm:w-16 sm:h-16 bg-[#1e3a8a] rounded-[12px] sm:rounded-[16px] flex items-center justify-center flex-shrink-0">
+              <svg className="w-6 h-6 sm:w-8 sm:h-8 text-white" fill="currentColor" viewBox="0 0 24 24">
                 <rect x="2" y="6" width="20" height="12" rx="2" />
                 <path d="M2 10h20" stroke="white" strokeWidth="2" />
               </svg>
@@ -157,8 +157,8 @@ export default function PaymentSelectionPage() {
 
             {/* Text Content */}
             <div className="flex-1 text-left">
-              <h3 className="text-white text-xl font-semibold mb-1">Visa Card</h3>
-              <p className="text-gray-400 text-sm">Debit or Credit card</p>
+              <h3 className="text-white text-base sm:text-xl font-semibold mb-0.5 sm:mb-1">Visa Card</h3>
+              <p className="text-gray-400 text-xs sm:text-sm">Debit or Credit card</p>
             </div>
 
             {/* Arrow Icon */}

@@ -78,19 +78,19 @@ function PaymentSuccessContent() {
   const isVisa = method === "visa";
 
   return (
-    <div className="min-h-screen bg-[#1a1f2e] flex flex-col items-center justify-between px-6 py-8">
+    <div className="min-h-screen bg-[#1a1f2e] flex flex-col items-center justify-between px-4 sm:px-6 py-6 sm:py-8">
       <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md">
 
         <div className="relative mb-8">
           <div className="absolute inset-0 bg-[#10b981] opacity-20 blur-3xl rounded-full" />
-          <div className="relative w-32 h-32 bg-gradient-to-br from-[#10b981] to-[#059669] rounded-full flex items-center justify-center border-4 border-[#10b981]/30">
-            <svg className="w-16 h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div className="relative w-24 h-24 sm:w-32 sm:h-32 bg-gradient-to-br from-[#10b981] to-[#059669] rounded-full flex items-center justify-center border-4 border-[#10b981]/30">
+            <svg className="w-12 h-12 sm:w-16 sm:h-16 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
             </svg>
           </div>
         </div>
 
-        <h1 className="text-white text-[36px] font-bold mb-2 text-center">Payment Successful</h1>
+        <h1 className="text-white text-[26px] sm:text-[36px] font-bold mb-2 text-center">Payment Successful</h1>
         <p className="text-gray-400 text-sm mb-8 text-center">Your transaction has been confirmed</p>
 
         <div
@@ -154,7 +154,7 @@ function PaymentSuccessContent() {
       <div className="w-full max-w-md pb-4 pt-6">
         <button
           onClick={() => router.push("/")}
-          className="w-full bg-white hover:bg-gray-100 text-[#1a1f2e] text-[17px] font-semibold py-5 px-6 rounded-[20px] transition-colors"
+          className="w-full bg-white hover:bg-gray-100 text-[#1a1f2e] text-[15px] sm:text-[17px] font-semibold py-4 sm:py-5 px-6 rounded-[20px] transition-colors"
         >
           Done
         </button>

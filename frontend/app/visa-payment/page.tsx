@@ -5,7 +5,9 @@ import { useRouter } from "next/navigation";
 import { loadStripe } from "@stripe/stripe-js";
 import {
   Elements,
-  PaymentElement,
+  CardNumberElement,
+  CardExpiryElement,
+  CardCvcElement,
   useStripe,
   useElements,
 } from "@stripe/react-stripe-js";
@@ -17,49 +19,125 @@ const stripePromise = loadStripe(
 const amount = 10;
 
 // ─── Inner form component (must be inside <Elements>) ───────────────────────
-function CheckoutForm() {
+function CheckoutForm({ clientSecret }: { clientSecret: string }) {
   const stripe = useStripe();
   const elements = useElements();
   const router = useRouter();
 
   const [isProcessing, setIsProcessing] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+  const [saveCard, setSaveCard] = useState(true);
+
+  const stripeFieldStyle = {
+    base: {
+      color: "#ffffff",
+      fontFamily: "system-ui, sans-serif",
+      fontSize: "18px",
+      fontWeight: "600",
+      letterSpacing: "0.05em",
+      "::placeholder": { color: "#4b5563" },
+      iconColor: "#ffffff",
+    },
+    invalid: { color: "#ef4444" },
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!stripe || !elements) return;
 
+    const cardNumber = elements.getElement(CardNumberElement);
+    if (!cardNumber) return;
+
     setIsProcessing(true);
     setErrorMessage("");
 
-    const { error } = await stripe.confirmPayment({
-      elements,
-      confirmParams: {
-        return_url: `${process.env.NEXT_PUBLIC_APP_URL}/payment-success?method=visa`,
-      },
+    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+      payment_method: { card: cardNumber },
     });
 
-    // If we reach here, confirmPayment redirected didn't happen — there was an error
     if (error) {
       setErrorMessage(
         error.message ?? "An unexpected error occurred. Please try again.",
       );
       setIsProcessing(false);
+    } else if (paymentIntent?.status === "succeeded") {
+      router.push(`${process.env.NEXT_PUBLIC_APP_URL}/payment-success?method=visa`);
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col flex-1">
-      {/* Card Details */}
-      <div className="bg-[#2a3441] rounded-[24px] p-6 mb-6">
-        <PaymentElement
-          options={{
-            layout: "tabs",
-            paymentMethodOrder: ["card"],
-          }}
-        />
+      {/* Card Container */}
+      <div className="bg-[#1e2a3a] rounded-[24px] p-6 mb-6 border border-[#2d3f55]">
+        {/* Card Header */}
+        <div className="flex items-center gap-3 mb-6">
+          <div className="w-10 h-10 bg-[#1e3a8a] rounded-[10px] flex items-center justify-center">
+            <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="2" y="6" width="20" height="12" rx="2" />
+              <path d="M2 10h20" stroke="white" strokeWidth="2" fill="none" />
+            </svg>
+          </div>
+          <h2 className="text-white text-lg font-semibold">Visa Card Details</h2>
+        </div>
+
+        {/* Card Number Row */}
+        <div className="mb-5">
+          <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-2">
+            Card Number
+          </label>
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <CardNumberElement
+                options={{ style: stripeFieldStyle, showIcon: false }}
+              />
+            </div>
+            {/* VISA badge */}
+            <div className="bg-[#1e3a8a] rounded-[6px] px-2 py-1 flex-shrink-0">
+              <span className="text-white text-xs font-black tracking-widest uppercase">VISA</span>
+            </div>
+          </div>
+          <div className="h-px bg-[#2d3f55] mt-3" />
+        </div>
+
+        {/* Expiry + CVV Row */}
+        <div className="grid grid-cols-2 gap-6">
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-2">
+              Expiry
+            </label>
+            <CardExpiryElement
+              options={{ style: stripeFieldStyle }}
+            />
+            <div className="h-px bg-[#2d3f55] mt-3" />
+          </div>
+          <div>
+            <label className="block text-[10px] font-bold uppercase tracking-[0.15em] text-gray-400 mb-2">
+              CVV
+            </label>
+            <CardCvcElement
+              options={{ style: stripeFieldStyle }}
+            />
+            <div className="h-px bg-[#2d3f55] mt-3" />
+          </div>
+        </div>
       </div>
+
+      {/* Save card checkbox */}
+      <label className="flex items-center gap-3 mb-6 cursor-pointer select-none">
+        <div
+          onClick={() => setSaveCard(!saveCard)}
+          className={`w-5 h-5 rounded-[5px] flex items-center justify-center flex-shrink-0 transition-colors ${saveCard ? "bg-[#1e3a8a] border-[#1e3a8a]" : "bg-transparent border border-gray-500"
+            }`}
+        >
+          {saveCard && (
+            <svg className="w-3 h-3 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+            </svg>
+          )}
+        </div>
+        <span className="text-gray-300 text-sm">Save card securely for future parking</span>
+      </label>
 
       {/* Error message */}
       {errorMessage && (
@@ -88,7 +166,7 @@ function CheckoutForm() {
       <button
         type="submit"
         disabled={!stripe || isProcessing}
-        className="w-full bg-[#1e3a8a] hover:bg-[#1e40af] text-white text-[17px] font-semibold py-5 px-6 rounded-[20px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="w-full bg-[#1e3a8a] hover:bg-[#1e40af] text-white text-[15px] sm:text-[17px] font-semibold py-4 sm:py-5 px-6 rounded-[20px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
       >
         {isProcessing ? (
           <>
@@ -161,7 +239,7 @@ export default function VisaPaymentPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[#1a1f2e] flex flex-col px-6 py-8">
+    <div className="min-h-screen bg-[#1a1f2e] flex flex-col px-4 sm:px-6 py-6 sm:py-8">
       {/* Back Button */}
       <div className="w-full max-w-md mx-auto mb-6">
         <button
@@ -176,30 +254,14 @@ export default function VisaPaymentPage() {
       </div>
 
       {/* Header */}
-      <div className="w-full max-w-md mx-auto text-center mb-10">
-        <h1 className="text-white text-[32px] font-bold mb-8">Visa Payment</h1>
+      <div className="w-full max-w-md mx-auto text-center mb-6 sm:mb-10">
+        <h1 className="text-white text-[26px] sm:text-[32px] font-bold mb-5 sm:mb-8">Visa Payment</h1>
         <p className="text-gray-400 text-sm uppercase tracking-[0.2em] mb-3">
           Total Amount
         </p>
-        <p className="text-white text-[56px] font-bold leading-none">
+        <p className="text-white text-[42px] sm:text-[56px] font-bold leading-none">
           Ksh {amount}
         </p>
-      </div>
-
-      {/* Card Section Header */}
-      <div className="w-full max-w-md mx-auto mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="w-12 h-12 bg-[#1e3a8a] rounded-[12px] flex items-center justify-center">
-            <svg className="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="2" y="6" width="20" height="12" rx="2" />
-              <path d="M2 10h20" stroke="white" strokeWidth="2" fill="none" />
-            </svg>
-          </div>
-          <div>
-            <h2 className="text-white text-xl font-semibold">Card Details</h2>
-            <p className="text-gray-400 text-sm">Visa, Mastercard, Amex accepted</p>
-          </div>
-        </div>
       </div>
 
       {/* Main content area */}
@@ -227,7 +289,7 @@ export default function VisaPaymentPage() {
         ) : (
           clientSecret && (
             <Elements stripe={stripePromise} options={elementsOptions}>
-              <CheckoutForm />
+              <CheckoutForm clientSecret={clientSecret} />
             </Elements>
           )
         )}

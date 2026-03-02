@@ -232,7 +232,7 @@ export default function MpesaPaymentPage() {
         : `Waiting for PIN... ${secondsLeft}s`;
 
   return (
-    <div className="min-h-screen bg-[#1a1f2e] flex flex-col px-6 py-8">
+    <div className="min-h-screen bg-[#1a1f2e] flex flex-col px-4 sm:px-6 py-6 sm:py-8">
 
       {/* ── Change-number overlay ──────────────────────────────────────────── */}
       {showChangeNumber && (
@@ -285,10 +285,10 @@ export default function MpesaPaymentPage() {
       </div>
 
       {/* Header */}
-      <div className="w-full max-w-md mx-auto text-center mb-10">
-        <h1 className="text-white text-[32px] font-bold mb-8">M-Pesa Payment</h1>
+      <div className="w-full max-w-md mx-auto text-center mb-6 sm:mb-10">
+        <h1 className="text-white text-[26px] sm:text-[32px] font-bold mb-5 sm:mb-8">M-Pesa Payment</h1>
         <p className="text-gray-400 text-sm uppercase tracking-[0.2em] mb-3">Total Amount</p>
-        <p className="text-white text-[56px] font-bold leading-none">Ksh {AMOUNT}</p>
+        <p className="text-white text-[42px] sm:text-[56px] font-bold leading-none">Ksh {AMOUNT}</p>
       </div>
 
       {/* Payment Form */}
@@ -312,16 +312,17 @@ export default function MpesaPaymentPage() {
         <div className="mb-2">
           <label className="block text-[#10b981] text-sm font-medium mb-3">Phone Number</label>
           <div className="relative">
-            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-lg font-medium">
+            <div className="absolute left-4 top-1/2 -translate-y-1/2 text-white text-base sm:text-lg font-medium">
               +254
             </div>
             <input
               type="tel"
+              inputMode="numeric"
               value={phoneNumber}
               onChange={handlePhoneNumberChange}
               placeholder="712345678"
               disabled={isProcessing}
-              className="w-full bg-[#2a3441] text-white text-lg py-4 pl-20 pr-4 rounded-[16px] border-2 border-transparent focus:border-[#10b981] focus:outline-none transition-colors placeholder:text-gray-500 disabled:opacity-50"
+              className="w-full bg-[#2a3441] text-white text-base sm:text-lg py-4 pl-[72px] sm:pl-20 pr-4 rounded-[16px] border-2 border-transparent focus:border-[#10b981] focus:outline-none transition-colors placeholder:text-gray-500 disabled:opacity-50"
               maxLength={9}
             />
           </div>
@@ -421,7 +422,7 @@ export default function MpesaPaymentPage() {
           <button
             onClick={handlePayment}
             disabled={!isPhoneValid || isProcessing}
-            className="w-full bg-[#10b981] hover:bg-[#059669] text-white text-[17px] font-semibold py-5 px-6 rounded-[20px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="w-full bg-[#10b981] hover:bg-[#059669] text-white text-[15px] sm:text-[17px] font-semibold py-4 sm:py-5 px-6 rounded-[20px] transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
           >
             {isProcessing ? (
               <>
