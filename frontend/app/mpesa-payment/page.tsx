@@ -8,7 +8,7 @@ const SESSION_KEY = "qr_pay_checkout_id";
 const AMOUNT = 10;
 const MAX_ATTEMPTS = 12;
 const NUDGE_AFTER_ATTEMPTS = 5;
-const TIMEOUT_MS = 90_000;
+const TIMEOUT_MS = 60_000; // Matches Safaricom's STK Push prompt lifetime exactly
 
 function isSafaricomNumber(nineDigits: string): boolean {
   if (nineDigits.length < 3) return true;
@@ -148,7 +148,8 @@ export default function MpesaPaymentPage() {
 
   // ─── Phone number input ───────────────────────────────────────────────────
   const handlePhoneNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, "");
+    // Strip non-digits, then strip any leading 0 so the field always starts with 7 or 1
+    const value = e.target.value.replace(/\D/g, "").replace(/^0+/, "");
     if (value.length <= 9) {
       setPhoneNumber(value);
       setError("");

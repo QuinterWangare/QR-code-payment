@@ -18,6 +18,32 @@ const stripePromise = loadStripe(
 
 const amount = 10;
 
+// ─── Stripe error-code → user-friendly message map ───────────────────────────
+// Retryable errors are shown inline; hard errors redirect to /payment-failed.
+const STRIPE_ERROR_MAP: Record<string, { message: string; hard: boolean }> = {
+  insufficient_funds:       { hard: false, message: "Your card has insufficient funds. Please use a different card or top up and try again." },
+  incorrect_cvc:            { hard: false, message: "The security code (CVV) you entered is incorrect. Please check and try again." },
+  expired_card:             { hard: false, message: "Your card has expired. Please use a different card." },
+  incorrect_number:         { hard: false, message: "The card number you entered is invalid. Please check it and try again." },
+  invalid_expiry_month:     { hard: false, message: "The expiry month is invalid. Please check your card details." },
+  invalid_expiry_year:      { hard: false, message: "The expiry year is invalid. Please check your card details." },
+  invalid_cvc:              { hard: false, message: "The CVV format is invalid. Please re-enter it." },
+  card_velocity_exceeded:   { hard: false, message: "Too many payment attempts on this card. Please wait a few minutes and try again." },
+  processing_error:         { hard: false, message: "A temporary error occurred while processing your card. Please try again." },
+  card_declined:            { hard: false, message: "Your card was declined. Please try a different card or contact your bank." },
+  do_not_honor:             { hard: true,  message: "Your bank declined this transaction. Please contact your bank or use a different card." },
+  fraudulent:               { hard: true,  message: "This transaction was flagged by your bank. Please use a different card or contact your bank." },
+  lost_card:                { hard: true,  message: "This card has been reported as lost. Please use a different card." },
+  stolen_card:              { hard: true,  message: "This card has been reported as stolen. Please use a different card." },
+  pickup_card:              { hard: true,  message: "Your bank requires you to contact them before this card can be used." },
+  authentication_required:  { hard: false, message: "Your bank requires additional authentication. Please try again and follow the prompts." },
+};
+
+function stripeErrorMessage(code: string | undefined, fallback: string): { message: string; hard: boolean } {
+  if (code && STRIPE_ERROR_MAP[code]) return STRIPE_ERROR_MAP[code];
+  return { hard: false, message: fallback || "An unexpected error occurred. Please try again." };
+}
+
 // ─── Inner form component (must be inside <Elements>) ───────────────────────
 function CheckoutForm({ clientSecret }: { clientSecret: string }) {
   const stripe = useStripe();
@@ -25,6 +51,7 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
   const router = useRouter();
 
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStage, setProcessingStage] = useState<"submitting" | "confirming">("submitting");
   const [errorMessage, setErrorMessage] = useState("");
   const [saveCard, setSaveCard] = useState(true);
 
@@ -50,19 +77,37 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
     if (!cardNumber) return;
 
     setIsProcessing(true);
+    setProcessingStage("submitting");
     setErrorMessage("");
 
-    const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
-      payment_method: { card: cardNumber },
-    });
+    try {
+      setProcessingStage("confirming");
+      const { error, paymentIntent } = await stripe.confirmCardPayment(clientSecret, {
+        payment_method: { card: cardNumber },
+      });
 
-    if (error) {
-      setErrorMessage(
-        error.message ?? "An unexpected error occurred. Please try again.",
-      );
+      if (error) {
+        const { message, hard } = stripeErrorMessage(error.code, error.message ?? "");
+        if (hard) {
+          router.push(
+            `/payment-failed?method=visa&reason=${error.code ?? "card_error"}&message=${encodeURIComponent(message)}`,
+          );
+          return;
+        }
+        setErrorMessage(message);
+        setIsProcessing(false);
+      } else if (paymentIntent?.status === "succeeded") {
+        router.push("/payment-success?method=visa");
+      } else {
+        // e.g. "requires_action" — Stripe.js will handle 3DS automatically;
+        // if we still land here with a non-success status, treat as a soft failure.
+        setErrorMessage("Payment was not completed. Please try again.");
+        setIsProcessing(false);
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "Could not reach the payment server. Please check your connection.";
+      setErrorMessage(msg);
       setIsProcessing(false);
-    } else if (paymentIntent?.status === "succeeded") {
-      router.push(`${process.env.NEXT_PUBLIC_APP_URL}/payment-success?method=visa`);
     }
   };
 
@@ -141,8 +186,11 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
 
       {/* Error message */}
       {errorMessage && (
-        <div className="bg-red-500/10 border border-red-500/30 rounded-[16px] p-4 mb-6">
-          <p className="text-red-400 text-sm">{errorMessage}</p>
+        <div className="bg-red-500/10 border border-red-500/30 rounded-[16px] p-4 mb-6 flex gap-3 items-start">
+          <svg className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+          </svg>
+          <p className="text-red-400 text-sm leading-relaxed">{errorMessage}</p>
         </div>
       )}
 
@@ -170,11 +218,11 @@ function CheckoutForm({ clientSecret }: { clientSecret: string }) {
       >
         {isProcessing ? (
           <>
-            <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+            <svg className="animate-spin h-5 w-5 text-white shrink-0" fill="none" viewBox="0 0 24 24">
               <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
               <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
             </svg>
-            Processing...
+            {processingStage === "submitting" ? "Submitting..." : "Confirming payment..."}
           </>
         ) : (
           <>

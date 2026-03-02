@@ -90,6 +90,77 @@ const reasonConfig: Record<string, { title: string; badge: string; tip: string }
     badge: "Failed",
     tip: "Something went wrong with your payment. Please try again. If the problem persists, contact Safaricom on *100#.",
   },
+  // ── Stripe / Visa error reasons ─────────────────────────────────────────
+  insufficient_funds: {
+    title: "Insufficient Funds",
+    badge: "Card Declined",
+    tip: "Your card does not have enough funds for this transaction. Please use a different card or top up and try again.",
+  },
+  incorrect_cvc: {
+    title: "Incorrect CVV",
+    badge: "CVV Error",
+    tip: "The security code (CVV) you entered does not match the card. Flip your card, re-enter the 3-digit code on the back, and try again.",
+  },
+  expired_card: {
+    title: "Card Expired",
+    badge: "Card Expired",
+    tip: "Your card has expired. Please use a different, valid card.",
+  },
+  incorrect_number: {
+    title: "Invalid Card Number",
+    badge: "Card Error",
+    tip: "The card number you entered is invalid. Please double-check every digit and try again.",
+  },
+  card_velocity_exceeded: {
+    title: "Too Many Attempts",
+    badge: "Limit Reached",
+    tip: "Too many payment attempts have been made on this card in a short time. Please wait a few minutes before trying again.",
+  },
+  card_declined: {
+    title: "Card Declined",
+    badge: "Declined",
+    tip: "Your card was declined. Please try a different card or contact your bank for details.",
+  },
+  do_not_honor: {
+    title: "Card Declined by Bank",
+    badge: "Bank Declined",
+    tip: "Your bank declined this transaction. Please contact your bank directly or use a different card.",
+  },
+  fraudulent: {
+    title: "Transaction Blocked",
+    badge: "Blocked",
+    tip: "This transaction was flagged by your bank. Please contact your bank or use a different card.",
+  },
+  lost_card: {
+    title: "Card Reported Lost",
+    badge: "Card Blocked",
+    tip: "This card has been reported as lost. Please contact your bank and use a different card.",
+  },
+  stolen_card: {
+    title: "Card Reported Stolen",
+    badge: "Card Blocked",
+    tip: "This card has been reported as stolen. Please contact your bank and use a different card.",
+  },
+  pickup_card: {
+    title: "Card Blocked",
+    badge: "Contact Bank",
+    tip: "Your bank requires you to contact them before this card can be used. Please call the number on the back of your card.",
+  },
+  processing_error: {
+    title: "Processing Error",
+    badge: "Temporary Error",
+    tip: "A temporary error occurred while processing your card. Please wait a moment and try again.",
+  },
+  authentication_required: {
+    title: "Authentication Required",
+    badge: "Auth Required",
+    tip: "Your bank requires additional verification for this transaction. Please try again and complete any prompts from your bank.",
+  },
+  card_error: {
+    title: "Card Error",
+    badge: "Card Error",
+    tip: "There was a problem with your card. Please check your card details or try a different card.",
+  },
 };
 
 const defaultConfig = {
@@ -104,11 +175,12 @@ function PaymentFailedContent() {
 
   const reason = searchParams.get("reason") || "failed";
   const message = searchParams.get("message") || "";
+  const method = searchParams.get("method"); // "visa" or null (mpesa)
 
   const config = reasonConfig[reason] ?? defaultConfig;
 
   const handleRetry = () => {
-    router.push("/mpesa-payment");
+    router.push(method === "visa" ? "/visa-payment" : "/mpesa-payment");
   };
 
   const handleClose = () => {
