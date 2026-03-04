@@ -2,13 +2,15 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { initiateStkPush, queryStkStatus } from "@/lib/mpesa-api";
+import { initiateStkPush, queryStkStatus, subscribeToPaymentResult } from "@/lib/mpesa-api";
 
 const SESSION_KEY = "qr_pay_checkout_id";
 const AMOUNT = 10;
-const MAX_ATTEMPTS = 12;
-const NUDGE_AFTER_ATTEMPTS = 5;
-const TIMEOUT_MS = 60_000; // Matches Safaricom's STK Push prompt lifetime exactly
+const POLL_INTERVAL_MS = 2_000;  // Poll every 2 s — fast enough for concurrent users
+const MAX_ATTEMPTS = 30;         // 30 × 2 s = 60 s total, same effective timeout
+const NUDGE_AFTER_ATTEMPTS = 12; // nudge after ~24 s
+const INITIAL_POLL_DELAY_MS = 5_000; // Give Safaricom 5 s to register the transaction
+const TIMEOUT_MS = 60_000;       // Matches Safaricom's STK Push prompt lifetime exactly
 
 function isSafaricomNumber(nineDigits: string): boolean {
   if (nineDigits.length < 3) return true;
@@ -19,7 +21,7 @@ function isSafaricomNumber(nineDigits: string): boolean {
     (p >= 757 && p <= 759) ||
     (p >= 768 && p <= 769) ||
     (p >= 790 && p <= 799) ||
-    p === 110 || p === 111 || p === 114 || p === 115
+    p === 110 || p === 111 || p === 112 || p === 113 || p === 114 || p === 115
   );
 }
 
@@ -30,6 +32,8 @@ function stkErrorMessage(reason: string | undefined, raw: string): string {
     case "invalid_sender":
     case "invalid_receiver":
       return "This number could not be reached on M-Pesa. Double-check it and try again.";
+    case "service_unavailable":
+      return "M-Pesa service is temporarily unavailable. Please wait a moment and try again.";
     default:
       return raw || "Could not send the M-Pesa prompt. Please verify the number and try again.";
   }
@@ -50,11 +54,15 @@ export default function MpesaPaymentPage() {
 
   const pollToken = useRef(0);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Holds the unsubscribe function for the active SSE connection.
+  const unsubscribeSseRef = useRef<(() => void) | null>(null);
 
   // ─── Reset ────────────────────────────────────────────────────────────────
   const resetToForm = useCallback(() => {
     pollToken.current += 1;
     if (countdownRef.current) clearInterval(countdownRef.current);
+    unsubscribeSseRef.current?.();
+    unsubscribeSseRef.current = null;
     sessionStorage.removeItem(SESSION_KEY);
     setIsProcessing(false);
     setProcessingStage("sending");
@@ -91,7 +99,33 @@ export default function MpesaPaymentPage() {
       setShowChangeNumber(false);
       sessionStorage.setItem(SESSION_KEY, checkoutRequestId);
 
+      // Close any previous SSE connection before opening a new one.
+      unsubscribeSseRef.current?.();
+      unsubscribeSseRef.current = null;
+
       const myToken = pollToken.current;
+
+      // ── SSE: zero-lag push the instant the M-Pesa callback arrives ──────
+      // This fires before the next poll cycle, eliminating the detection lag.
+      // Polling below continues as a fallback in case SSE drops.
+      unsubscribeSseRef.current = subscribeToPaymentResult(
+        checkoutRequestId,
+        (result) => {
+          if (pollToken.current !== myToken) return; // stale session
+          unsubscribeSseRef.current = null;
+          if (countdownRef.current) clearInterval(countdownRef.current);
+          sessionStorage.removeItem(SESSION_KEY);
+          if (result.status === "success") {
+            router.push("/payment-success");
+          } else if (result.status === "failed") {
+            redirectFailed(
+              result.reason || "failed",
+              result.message || "Payment was not completed. Please try again.",
+            );
+          }
+        },
+      );
+
       let attempts = 0;
 
       const poll = async (): Promise<void> => {
@@ -124,15 +158,15 @@ export default function MpesaPaymentPage() {
               data.message || "Payment was not completed. Please try again.",
             );
           } else {
-            setTimeout(poll, 5000);
+            setTimeout(poll, POLL_INTERVAL_MS);
           }
         } catch {
           if (pollToken.current !== myToken) return;
-          setTimeout(poll, 5000);
+          setTimeout(poll, POLL_INTERVAL_MS);
         }
       };
 
-      setTimeout(poll, delayFirstPoll ? 5000 : 1000);
+      setTimeout(poll, delayFirstPoll ? INITIAL_POLL_DELAY_MS : 500);
     },
     [router, redirectFailed],
   );
@@ -344,13 +378,24 @@ export default function MpesaPaymentPage() {
 
         {/* Nudge */}
         {showNudge && !timedOut && (
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-[16px] p-4 mb-6 flex gap-3 items-start">
-            <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-            <p className="text-amber-300 text-sm leading-relaxed">
-              Still waiting… Check that your phone received the M-Pesa prompt.
-            </p>
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-[16px] p-4 mb-6">
+            <div className="flex gap-3 items-start">
+              <svg className="w-5 h-5 text-amber-400 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+              </svg>
+              <p className="text-amber-300 text-sm leading-relaxed">
+                Still waiting… Check that your phone received the M-Pesa prompt.
+              </p>
+            </div>
+            <button
+              onClick={handleResend}
+              className="mt-3 w-full bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 hover:text-amber-200 text-xs font-semibold py-2.5 rounded-[10px] transition-colors flex items-center justify-center gap-1.5"
+            >
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              Resend prompt
+            </button>
           </div>
         )}
 

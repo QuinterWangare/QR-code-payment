@@ -10,12 +10,29 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify(body),
     });
 
-    const data = await backendRes.json();
+    // Safely parse JSON — some error responses (e.g. 503 from a proxy) may not
+    // be valid JSON, so fall back to a generic error shape.
+    let data: Record<string, unknown>;
+    try {
+      data = await backendRes.json();
+    } catch {
+      data = {
+        status: false,
+        reason: "service_unavailable",
+        msg: "M-Pesa service is temporarily unavailable. Please try again.",
+      };
+    }
+
     return NextResponse.json(data, { status: backendRes.status });
   } catch (error) {
+    console.error("[stkpush proxy] Failed to reach backend:", error);
     return NextResponse.json(
-      { msg: "Failed to reach payment server", status: false },
-      { status: 500 },
+      {
+        status: false,
+        reason: "service_unavailable",
+        msg: "Could not reach the payment server. Please check your connection and try again.",
+      },
+      { status: 503 },
     );
   }
 }

@@ -1,6 +1,6 @@
 # Smart QR Scan-to-Pay
 
-A full-stack parking payment system where a customer scans a QR code and pays directly from their phone via **M-Pesa** (STK Push) — no app download required.
+A full-stack payment system where a customer scans a QR code and pays directly from their phone via **M-Pesa** (STK Push) — no app download required.
 
 ---
 
@@ -97,7 +97,7 @@ cd ../frontend && npm install
 ### 2 — Start ngrok
 
 ```bash
-ngrok http --domain=<your-reserved-domain> 3000
+ngrok http 3000
 ```
 
 > The ngrok tunnel must point to **port 3000** (the Next.js frontend). Next.js API routes act as a secure server-side proxy to the Express backend.
